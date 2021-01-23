@@ -1,0 +1,80 @@
+version: "3"
+
+services:
+  master:
+    image: nginx
+    restart: always
+    networks:
+      - web
+    ports:
+      - 443:443
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    labels:
+      - traefik.http.routers.master.rule=Host(`coriolis.io`)
+      - traefik.http.routers.master.tls=true
+      - traefik.http.routers.master.tls.certresolver=lets-encrypt
+      - traefik.port=443
+
+  develop:
+    image: nginx
+    restart: always
+    networks:
+      - web
+    ports:
+      - 443:443
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    labels:
+      - traefik.http.routers.master.rule=Host(`beta.coriolis.io`)
+      - traefik.http.routers.master.tls=true
+      - traefik.http.routers.master.tls.certresolver=lets-encrypt
+      - traefik.port=443
+
+  shortener:
+    image: yourls
+    restart: always
+    networks:
+      - web
+      - internal
+    depends_on:
+      - db
+    labels:
+      - traefik.http.routers.master.rule=Host(`s.orbis.zone`)
+      - traefik.http.routers.master.tls=true
+      - traefik.http.routers.master.tls.certresolver=lets-encrypt
+      - traefik.port=443
+
+  traefik:
+    image: traefik
+    restart: always
+    networks:
+      - web
+    ports:
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:443
+      - --certificateresolvers.lets-encrypt.acme.tlschallenge=true
+      - --certificateresolvers.lets-encrypt.acme.email=${EMAIL}
+      - --certificateresolvers.lets-encrypt.acme.storage=/letsencrypt/acme.json
+
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD:
+    networks:
+      - internal
+    labels:
+      - traefik.enable=false
+
+networks:
+  web:
+    external: true
+  internal:
+    external: false
